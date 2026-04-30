@@ -9,21 +9,25 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      },
+    });
 
     if (!response.ok) {
       return new NextResponse(`Failed to fetch ROM: ${response.statusText}`, { status: response.status });
     }
 
-    // Forward the content type and other headers
     const headers = new Headers();
     const contentType = response.headers.get('Content-Type');
     if (contentType) {
       headers.set('Content-Type', contentType);
     }
     
-    // Set cache control for performance
-    headers.set('Cache-Control', 'public, max-age=3600');
+    // Подолг кеш за да не се презема истата игра повеќе пати
+    headers.set('Cache-Control', 'public, max-age=86400, immutable');
+    headers.set('Access-Control-Allow-Origin', '*');
 
     return new NextResponse(response.body, {
       status: 200,

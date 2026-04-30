@@ -20,59 +20,49 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
 
     const loadEmulator = async () => {
       try {
-        // Употребуваме 'latest' верзија за подобра компатибилност
-        const loaderPath = 'https://cdn.emulatorjs.org/latest/data/loader.js';
+        // Употребуваме jsDelivr CDN кој е многу побрз и постабилен
+        const loaderPath = 'https://cdn.jsdelivr.net/gh/EmulatorJS/EmulatorJS@latest/data/loader.js';
+        const dataPath = 'https://cdn.jsdelivr.net/gh/EmulatorJS/EmulatorJS@latest/data/';
         
-        // 1. Вметнување на скриптата ако не постои
+        // 1. Вметнување на скриптата
         if (!(window as any).EJS) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement('script');
             script.src = loaderPath;
-            script.async = false; // Оневозможуваме async за посигурно извршување
+            script.async = false;
             script.onload = () => resolve();
-            script.onerror = () => reject(new Error('Не може да се преземе емулаторот од серверот (CDN Error)'));
+            script.onerror = () => reject(new Error('Грешка при вчитување на системот од CDN.'));
             document.head.appendChild(script);
           });
         }
 
-        // 2. Поупорно чекање на EJS објектот (Safari знае да задоцни со извршување)
+        // 2. Чекање на EJS објектот
         let attempts = 0;
-        const maxAttempts = 150; // 15 секунди максимум
-        
-        while (!(window as any).EJS && attempts < maxAttempts) {
+        while (!(window as any).EJS && attempts < 100) {
           await new Promise(resolve => setTimeout(resolve, 100));
           attempts++;
         }
 
         if (!(window as any).EJS) {
-          // Последен обид - проверка на алтернативни имиња
-          const alternativeEJS = (window as any).EJS_emulator || (window as any).EmulatorJS;
-          if (alternativeEJS) {
-            (window as any).EJS = alternativeEJS;
-          } else {
-            throw new Error('Системот за игри не успеа да се активира. Ве молиме освежете ја страната.');
-          }
+          throw new Error('Системот за игри не успеа да се активира.');
         }
 
         if (!isMounted) return;
         setStatus('loading-rom');
 
+        // Ромовите сега одат директно преку нашиот прокси за максимална брзина
         const proxyUrl = `/api/rom?url=${encodeURIComponent(gameUrl)}`;
         const EJSConstructor = (window as any).EJS;
         
         if (containerRef.current && EJSConstructor) {
           containerRef.current.innerHTML = '';
           
-          // Конфигурација специфична за стабилност
-          const config = {
-            pathtodata: 'https://cdn.emulatorjs.org/latest/data/',
+          new EJSConstructor(containerRef.current, {
+            pathtodata: dataPath,
             core: core,
             game: proxyUrl,
             onGameStart: () => {
-              if (isMounted) {
-                console.log('Играта започна!');
-                setStatus('ready');
-              }
+              if (isMounted) setStatus('ready');
             },
             onProgress: (data: any) => {
               if (isMounted && data.total > 0) {
@@ -80,14 +70,7 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
                 setProgress(p);
               }
             },
-          };
-
-          try {
-            new EJSConstructor(containerRef.current, config);
-          } catch (initErr) {
-            console.error('EJS Init Error:', initErr);
-            throw new Error('Грешка при стартување на емулаторот.');
-          }
+          });
         }
       } catch (err) {
         if (isMounted) {
@@ -121,7 +104,7 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
 
       <div className="flex-1 flex items-center justify-center relative bg-black">
         {status === 'error' && (
-          <div className="text-center text-red-500 p-8 max-w-md">
+          <div className="text-center text-red-500 p-8">
             <p className="text-xl font-semibold mb-2">Грешка при вчитување</p>
             <p className="text-zinc-400 mb-6 text-sm">{error}</p>
             <button 
@@ -134,18 +117,18 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
         )}
 
         {status === 'loading-emulator' && (
-          <div className="text-center text-white p-4">
-            <div className="animate-pulse text-xl mb-4 font-light">Вчитување на системот...</div>
-            <div className="w-12 h-12 border-4 border-zinc-700 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
+          <div className="text-center text-white">
+            <div className="animate-pulse text-xl mb-4 font-light text-blue-400">Стартување мотор...</div>
+            <div className="w-12 h-12 border-4 border-zinc-800 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
           </div>
         )}
 
         {status === 'loading-rom' && (
           <div className="text-center text-white p-4 w-full max-w-xs">
-            <div className="animate-pulse text-xl mb-4 font-light">Преземање на играта...</div>
+            <div className="animate-pulse text-xl mb-4 font-light text-green-400">Брзо преземање...</div>
             <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden mb-3">
               <div 
-                className="h-full bg-blue-500 transition-all duration-300"
+                className="h-full bg-green-500 transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
