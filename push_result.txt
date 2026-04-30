@@ -1,0 +1,7 @@
+remote: error: Trace: 32ee6dc74e8bc21653181285fcfc644ecf4a87e6e37ab8f003f920a085efa186        
+remote: error: See https://gh.io/lfs for more information.        
+remote: error: File node_modules/@next/swc-linux-x64-gnu/next-swc.linux-x64-gnu.node is 124.23 MB; this exceeds GitHub's file size limit of 100.00 MB        
+remote: error: GH001: Large files detected. You may want to try Git Large File Storage - https://git-lfs.github.com.        
+To https://github.com/kormiloto/arcade-emulator.git
+ ! [remote rejected]   main -> main (pre-receive hook declined)
+error: failed to push some refs to 'https://github.com/kormiloto/arcade-emulator.git'
