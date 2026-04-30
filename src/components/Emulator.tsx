@@ -20,59 +20,79 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
 
     const loadEmulator = async () => {
       try {
-        const loaderPath = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+        // Употребуваме 'latest' верзија за подобра компатибилност
+        const loaderPath = 'https://cdn.emulatorjs.org/latest/data/loader.js';
         
-        // Ensure script is loaded
+        // 1. Вметнување на скриптата ако не постои
         if (!(window as any).EJS) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement('script');
             script.src = loaderPath;
-            script.async = true;
-            script.crossOrigin = 'anonymous';
+            script.async = false; // Оневозможуваме async за посигурно извршување
             script.onload = () => resolve();
-            script.onerror = () => reject(new Error('Failed to load EmulatorJS script from CDN'));
+            script.onerror = () => reject(new Error('Не може да се преземе емулаторот од серверот (CDN Error)'));
             document.head.appendChild(script);
           });
         }
 
-        // Wait for EJS constructor to be ready
+        // 2. Поупорно чекање на EJS објектот (Safari знае да задоцни со извршување)
         let attempts = 0;
-        while (!(window as any).EJS && attempts < 100) {
+        const maxAttempts = 150; // 15 секунди максимум
+        
+        while (!(window as any).EJS && attempts < maxAttempts) {
           await new Promise(resolve => setTimeout(resolve, 100));
           attempts++;
         }
 
         if (!(window as any).EJS) {
-          throw new Error('EmulatorJS object (EJS) not found after loading script');
+          // Последен обид - проверка на алтернативни имиња
+          const alternativeEJS = (window as any).EJS_emulator || (window as any).EmulatorJS;
+          if (alternativeEJS) {
+            (window as any).EJS = alternativeEJS;
+          } else {
+            throw new Error('Системот за игри не успеа да се активира. Ве молиме освежете ја страната.');
+          }
         }
 
         if (!isMounted) return;
         setStatus('loading-rom');
 
         const proxyUrl = `/api/rom?url=${encodeURIComponent(gameUrl)}`;
-        const ejs = (window as any).EJS;
+        const EJSConstructor = (window as any).EJS;
         
-        if (containerRef.current) {
+        if (containerRef.current && EJSConstructor) {
           containerRef.current.innerHTML = '';
           
-          new ejs(containerRef.current, {
-            pathtodata: 'https://cdn.emulatorjs.org/stable/data/',
+          // Конфигурација специфична за стабилност
+          const config = {
+            pathtodata: 'https://cdn.emulatorjs.org/latest/data/',
             core: core,
             game: proxyUrl,
             onGameStart: () => {
-              if (isMounted) setStatus('ready');
+              if (isMounted) {
+                console.log('Играта започна!');
+                setStatus('ready');
+              }
             },
             onProgress: (data: any) => {
               if (isMounted && data.total > 0) {
-                setProgress(Math.round((data.loaded / data.total) * 100));
+                const p = Math.round((data.loaded / data.total) * 100);
+                setProgress(p);
               }
             },
-          });
+          };
+
+          try {
+            new EJSConstructor(containerRef.current, config);
+          } catch (initErr) {
+            console.error('EJS Init Error:', initErr);
+            throw new Error('Грешка при стартување на емулаторот.');
+          }
         }
       } catch (err) {
         if (isMounted) {
           setStatus('error');
-          setError(err instanceof Error ? err.message : 'Unknown emulator error');
+          setError(err instanceof Error ? err.message : 'Неочекувана грешка');
         }
       }
     };
@@ -88,54 +108,55 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
   }, [core, gameUrl]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black">
+    <div className="fixed inset-0 z-50 flex flex-col bg-black overflow-hidden">
       <header className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800">
-        <h2 className="text-lg font-semibold text-white">{gameName}</h2>
+        <h2 className="text-lg font-semibold text-white truncate mr-4">{gameName}</h2>
         <button
           onClick={onClose}
-          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex-shrink-0"
         >
           Close
         </button>
       </header>
 
-      <div className="flex-1 flex items-center justify-center relative">
+      <div className="flex-1 flex items-center justify-center relative bg-black">
         {status === 'error' && (
-          <div className="text-center text-red-500 p-8">
-            <p className="text-xl font-semibold mb-2">Error Loading Emulator</p>
-            <p className="text-zinc-400 mb-4">{error}</p>
+          <div className="text-center text-red-500 p-8 max-w-md">
+            <p className="text-xl font-semibold mb-2">Грешка при вчитување</p>
+            <p className="text-zinc-400 mb-6 text-sm">{error}</p>
             <button 
-              onClick={onClose}
-              className="px-6 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg"
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg font-medium"
             >
-              Go Back
+              Освежи страна
             </button>
           </div>
         )}
 
         {status === 'loading-emulator' && (
-          <div className="text-center text-white">
-            <div className="animate-pulse text-xl mb-4">Loading Emulator Engine...</div>
-            <div className="w-16 h-16 border-4 border-zinc-600 border-t-white rounded-full animate-spin mx-auto"></div>
+          <div className="text-center text-white p-4">
+            <div className="animate-pulse text-xl mb-4 font-light">Вчитување на системот...</div>
+            <div className="w-12 h-12 border-4 border-zinc-700 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
           </div>
         )}
 
         {status === 'loading-rom' && (
-          <div className="text-center text-white">
-            <div className="animate-pulse text-xl mb-4">Downloading Game...</div>
-            <div className="w-64 h-3 bg-zinc-800 rounded-full overflow-hidden mx-auto">
+          <div className="text-center text-white p-4 w-full max-w-xs">
+            <div className="animate-pulse text-xl mb-4 font-light">Преземање на играта...</div>
+            <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden mb-3">
               <div 
                 className="h-full bg-blue-500 transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className="text-zinc-500 mt-2 text-sm">{progress}%</p>
+            <p className="text-zinc-500 text-sm font-mono">{progress}%</p>
           </div>
         )}
 
         <div 
           ref={containerRef} 
-          className={`w-full h-full ${status === 'ready' ? 'block' : 'hidden'}`} 
+          className={`w-full h-full ${status === 'ready' ? 'block' : 'hidden'}`}
+          style={{ touchAction: 'none' }}
         />
       </div>
     </div>
