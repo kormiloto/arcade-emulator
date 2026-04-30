@@ -11,9 +11,8 @@ interface EmulatorProps {
 
 export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [status, setStatus] = useState<'loading-script' | 'ready-to-start' | 'loading-rom' | 'playing' | 'error'>('loading-script');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'playing' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<number>(0);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
   const addLog = (msg: string) => {
@@ -21,89 +20,55 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
     setDebugLogs(prev => [...prev.slice(-5), msg]);
   };
 
-  useEffect(() => {
-    let isMounted = true;
-    addLog('Вчитување на скрипта...');
-
-    // Користиме официјален CDN со cache-buster
-    const loaderPath = `https://cdn.emulatorjs.org/stable/data/loader.js?v=${Date.now()}`;
+  const startEmulator = () => {
+    addLog('Иницирање на иницијализација...');
     
+    if (!containerRef.current) return;
+
+    setStatus('playing');
+    addLog('Активирање на скриптата...');
+
+    // БРИШЕЊЕ НА СТАРИ СКРИПТИ
+    const oldScript = document.getElementById('ejs-loader');
+    if (oldScript) oldScript.remove();
+
+    // ПОСТАВУВАЊЕ ГЛОБАЛНИ КОНФИГУРАЦИИ (Ова е начинот на EmulatorJS)
+    const proxyUrl = `/api/rom?url=${encodeURIComponent(gameUrl)}`;
+    const system = core === 'genesis_plus_gx' ? 'segaMD' : 'neogeo';
+
+    (window as any).EJS_player = '#emulator-container';
+    (window as any).EJS_core = core;
+    (window as any).EJS_gameUrl = proxyUrl;
+    (window as any).EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+    (window as any).EJS_startOnLoaded = true;
+
+    // Вметнување на лоадерот
     const script = document.createElement('script');
-    script.src = loaderPath;
-    script.async = true;
-    
-    script.onload = () => {
-      if (!isMounted) return;
-      addLog('Скриптата пристигна.');
-      
-      // Мала пауза за Safari да го процесира објектот
-      setTimeout(() => {
-        if ((window as any).EJS || (window as any).EmulatorJS) {
-          addLog('EJS е пронајден!');
-          setStatus('ready-to-start');
-        } else {
-          addLog('Скриптата е тука, но EJS објектот фали.');
-          setStatus('error');
-          setError('Системот не може да се иницијализира (Object Missing).');
-        }
-      }, 500);
-    };
-
+    script.id = 'ejs-loader';
+    script.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+    script.onload = () => addLog('Лоадерот е вчитан.');
     script.onerror = () => {
-      addLog('Мрежна грешка при вчитување.');
+      addLog('Грешка при вчитување.');
+      setError('Не може да се вчита лоадерот.');
       setStatus('error');
-      setError('Нема интернет врска со серверот за игри.');
     };
 
     document.head.appendChild(script);
+  };
 
+  useEffect(() => {
+    addLog('Емулаторот е подготвен за старт.');
+    setStatus('ready');
+    
     return () => {
-      isMounted = false;
-      if (script.parentNode) script.parentNode.removeChild(script);
+      // Чистење на глобалните променливи
+      delete (window as any).EJS_player;
+      delete (window as any).EJS_core;
+      delete (window as any).EJS_gameUrl;
+      const loader = document.getElementById('ejs-loader');
+      if (loader) loader.remove();
     };
   }, []);
-
-  const startEmulator = () => {
-    addLog('Стартување...');
-    
-    // Проверка на сите можни имиња
-    const EJSConstructor = (window as any).EJS || (window as any).EmulatorJS;
-    
-    if (!EJSConstructor) {
-      addLog('КРИТИЧНО: EJS сепак го нема.');
-      setError('Ве молиме освежете ја страната (Refresh).');
-      return;
-    }
-
-    setStatus('loading-rom');
-    const proxyUrl = `/api/rom?url=${encodeURIComponent(gameUrl)}`;
-    const dataPath = 'https://cdn.emulatorjs.org/stable/data/';
-    const system = core === 'genesis_plus_gx' ? 'segaMD' : 'neogeo';
-
-    if (containerRef.current) {
-      containerRef.current.innerHTML = '';
-      try {
-        new EJSConstructor(containerRef.current, {
-          pathtodata: dataPath,
-          core: core,
-          system: system,
-          gameUrl: proxyUrl,
-          startOnLoaded: true,
-          onGameStart: () => setStatus('playing'),
-          onProgress: (data: any) => {
-            if (data.total > 0) {
-              setProgress(Math.round((data.loaded / data.total) * 100));
-            }
-          },
-        });
-        addLog('Конструкторот е повикан.');
-      } catch (err: any) {
-        addLog(`Грешка: ${err.message}`);
-        setError(err.message);
-        setStatus('error');
-      }
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black overflow-hidden">
@@ -114,7 +79,7 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
 
       <div className="flex-1 flex items-center justify-center relative bg-black">
         {/* Debug Console */}
-        <div className="absolute top-2 left-2 right-2 bg-black/60 p-2 rounded text-[10px] font-mono text-blue-400 z-30 pointer-events-none">
+        <div className="absolute top-2 left-2 right-2 bg-black/40 p-2 rounded text-[10px] font-mono text-blue-400 z-30 pointer-events-none">
           {debugLogs.map((log, i) => <div key={i}>> {log}</div>)}
         </div>
 
@@ -126,39 +91,32 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
           </div>
         )}
 
-        {status === 'loading-script' && (
-          <div className="text-center text-white z-20">
-            <div className="w-10 h-10 border-2 border-zinc-800 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
-            <div className="animate-pulse text-sm font-light">Се вчитува...</div>
-          </div>
-        )}
-
-        {status === 'ready-to-start' && (
+        {status === 'ready' && (
           <div className="text-center z-20">
+            <div className="text-6xl mb-6">🎮</div>
             <button 
               onClick={startEmulator}
-              className="px-12 py-5 bg-green-600 hover:bg-green-500 text-white rounded-2xl font-bold text-xl transform active:scale-95 transition-all"
+              className="px-12 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-xl shadow-2xl transform active:scale-95 transition-all"
             >
-              СТАРТУВАЈ
+              ИГРАЈ СЕГА
             </button>
+            <p className="text-zinc-500 mt-4 text-sm">Притиснете за старт</p>
           </div>
         )}
 
-        {status === 'loading-rom' && (
-          <div className="text-center text-white p-4 w-full max-w-xs z-20">
-            <div className="text-lg mb-4 font-light">Вчитување ({progress}%)</div>
-            <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${progress}%` }} />
-            </div>
+        {status === 'playing' && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-zinc-700 animate-pulse">Вчитување на играта...</div>
           </div>
         )}
 
         <div 
           ref={containerRef} 
-          className="w-full h-full"
+          id="emulator-container"
+          className="w-full h-full z-10"
           style={{ 
             display: status === 'playing' ? 'block' : 'none',
-            minHeight: '300px'
+            backgroundColor: '#000'
           }}
         />
       </div>
