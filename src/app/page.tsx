@@ -61,10 +61,10 @@ export default function Home() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Info Banner */}
-        <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-4 mb-8">
-          <p className="text-amber-200 text-sm">
-            <span className="font-semibold">Note:</span> Games load from Archive.org. 
-            First launch may take a moment as the ROM downloads. Make sure your connection is stable.
+        <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-4 mb-8">
+          <p className="text-blue-200 text-sm">
+            <span className="font-semibold">Инфо:</span> Користиме брзи сервери за игрите. 
+            Првото стартување може да потрае неколку секунди додека се преземат податоците.
           </p>
         </div>
 
@@ -120,7 +120,7 @@ export default function Home() {
       <footer className="border-t border-zinc-800 mt-16">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <p className="text-center text-zinc-500 text-sm">
-            Built with EmulatorJS • ROMs sourced from Archive.org
+            Изработено со EmulatorJS • Игрите се преземаат од GitHub CDN
           </p>
         </div>
       </footer>
