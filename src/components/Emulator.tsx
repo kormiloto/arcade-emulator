@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface EmulatorProps {
   core: string;
@@ -16,26 +16,29 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
   const startEmulator = () => {
     setStatus('playing');
     
-    // Чистење на претходни остатоци
     const existingScript = document.getElementById('ejs-loader');
     if (existingScript) existingScript.remove();
 
-    // ГЛОБАЛНИ ПОСТАВКИ (Наједноставен можен формат)
+    // ПРАВИЛНА ПАТЕКА ДО ПОДАТОЦИТЕ (Апсолутна URL)
+    const dataPath = 'https://cdn.emulatorjs.org/stable/data/';
     const proxyUrl = `/api/rom?url=${encodeURIComponent(gameUrl)}`;
-    const system = core === 'genesis_plus_gx' ? 'segaMD' : 'neogeo';
 
-    (window as any).EJS_player = '#game-canvas'; // Мора да биде ID
+    // Конфигурација според официјалната документација за стабилност
+    const system = core === 'genesis_plus_gx' ? 'segaMD' : 'neogeo';
+    (window as any).EJS_player = '#game-canvas';
     (window as any).EJS_core = core;
+    (window as any).EJS_system = system;
     (window as any).EJS_gameUrl = proxyUrl;
-    (window as any).EJS_pathtodata = 'https://cdn.jsdelivr.net/gh/EmulatorJS/EmulatorJS@latest/data/';
+    (window as any).EJS_pathtodata = dataPath; 
     (window as any).EJS_startOnLoaded = true;
+    (window as any).EJS_DEBUG_XX = true; // За секој случај
 
     const script = document.createElement('script');
     script.id = 'ejs-loader';
-    script.src = 'https://cdn.jsdelivr.net/gh/EmulatorJS/EmulatorJS@latest/data/loader.js';
+    script.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
     
     script.onerror = () => {
-      setError('Грешка при вчитување на системот.');
+      setError('Грешка при поврзување со серверот за игри.');
       setStatus('error');
     };
 
@@ -49,9 +52,9 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
         <button 
           onClick={() => {
             if (onClose) onClose();
-            window.location.reload(); // Најсигурен начин да се сопре емулаторот
+            window.location.reload(); 
           }} 
-          className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold"
+          className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold active:scale-95 transition-transform"
         >
           ЗАТВОРИ
         </button>
@@ -59,38 +62,39 @@ export default function Emulator({ core, gameUrl, gameName, onClose }: EmulatorP
 
       <div className="flex-1 flex items-center justify-center relative bg-black">
         {status === 'ready' && (
-          <div className="text-center">
-            <div className="text-6xl mb-6">🎮</div>
+          <div className="text-center animate-in fade-in duration-500">
+            <div className="text-7xl mb-8">🕹️</div>
             <button 
               onClick={startEmulator}
-              className="px-14 py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-2xl shadow-2xl animate-bounce"
+              className="px-16 py-7 bg-blue-600 hover:bg-blue-500 text-white rounded-3xl font-black text-3xl shadow-[0_0_50px_rgba(37,99,235,0.4)] active:scale-95 transition-all"
             >
               ИГРАЈ
             </button>
-            <p className="text-zinc-500 mt-6 text-sm">Спремно за стартување</p>
+            <p className="text-zinc-500 mt-8 text-sm tracking-widest uppercase">Спремно за мобилен и десктоп</p>
           </div>
         )}
 
         {status === 'error' && (
           <div className="text-center text-red-500 p-8">
             <p className="text-xl font-bold mb-4">{error}</p>
-            <button onClick={() => window.location.reload()} className="px-6 py-2 bg-white text-black rounded-lg font-bold">ПРОБАЈ ПАК</button>
+            <button onClick={() => window.location.reload()} className="px-6 py-2 bg-white text-black rounded-lg font-bold">ОСВЕЖИ</button>
           </div>
         )}
 
-        {/* Овој див е клучот. Мора да има фиксни димензии за некои прелистувачи */}
         <div 
           id="game-canvas" 
           className="w-full h-full"
           style={{ 
             display: status === 'playing' ? 'block' : 'none',
-            minHeight: '100dvh' 
+            backgroundColor: '#000',
+            height: '100%'
           }}
         ></div>
         
         {status === 'playing' && (
-          <div className="absolute inset-0 flex items-center justify-center -z-10">
-            <div className="text-zinc-800 text-lg animate-pulse">Се вчитува...</div>
+          <div className="absolute inset-0 flex flex-col items-center justify-center -z-10">
+            <div className="w-12 h-12 border-4 border-zinc-800 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+            <div className="text-zinc-600 text-sm font-medium animate-pulse">ВЧИТУВАЊЕ...</div>
           </div>
         )}
       </div>
